@@ -17,6 +17,7 @@ import ru.projectx.contracts.message.task.TaskParticipant;
 import ru.projectx.contracts.service.inbox.parse.MessageBodies;
 import ru.projectx.contracts.support.TaskBodies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ContractTaskParserTest {
 
@@ -89,6 +90,29 @@ class ContractTaskParserTest {
 
         assertThat(parser.parse(body.toJson()).participants().get(1).programId())
                 .isEqualTo(UUID.fromString("2f6a0c1e-3d5b-4a7c-9e8f-0b1c2d3e4f5a"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"program_id", "personal_data.middle_name", "personal_data.relation_type",
+            "personal_data.address", "personal_data.document.series", "personal_data.document.issued_by",
+            "personal_data.document.issued_at", "personal_data.document.division_code"})
+    void nonTextOptionalParticipantField_isViolationNamingTheField(String path) {
+        assertThatThrownBy(() -> parser.parse(withNumber(path)))
+                .isInstanceOf(ContractViolationException.class)
+                .hasMessage("недопустимое значение поля data.participants[0]." + path)
+                .hasNoCause();
+    }
+
+    private static String withNumber(String path) {
+        JsonMapper json = JsonMapper.builder().build();
+        ObjectNode root = (ObjectNode) json.readTree(TaskBodies.upserted().toJson());
+        ObjectNode node = (ObjectNode) root.at("/data/participants/0");
+        String[] names = path.split("\\.");
+        for (int i = 0; i < names.length - 1; i++) {
+            node = (ObjectNode) node.get(names[i]);
+        }
+        node.put(names[names.length - 1], 5);
+        return json.writeValueAsString(root);
     }
 
     @Test

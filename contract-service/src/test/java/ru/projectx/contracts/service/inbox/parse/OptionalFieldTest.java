@@ -7,6 +7,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import ru.projectx.contracts.exception.ContractViolationException;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -29,16 +31,50 @@ class OptionalFieldTest {
     }
 
     @Test
-    void textValues_areNullWhenMissingNullOrNotText() {
-        assertThat(data.field("missing").optional().text()).isNull();
-        assertThat(data.field("nothing").optional().text()).isNull();
-        assertThat(data.field("number").optional().text()).isNull();
-        assertThat(data.field("missing").optional().uuid()).isNull();
-        assertThat(data.field("nothing").optional().uuid()).isNull();
-        assertThat(data.field("number").optional().uuid()).isNull();
-        assertThat(data.field("missing").optional().date()).isNull();
-        assertThat(data.field("nothing").optional().date()).isNull();
-        assertThat(data.field("number").optional().date()).isNull();
+    void absentOptionalValues_areNull() {
+        JsonFields fields = nodes();
+        assertThat(fields.field("missing").optional().text()).isNull();
+        assertThat(fields.field("nothing").optional().text()).isNull();
+        assertThat(fields.field("missing").optional().uuid()).isNull();
+        assertThat(fields.field("nothing").optional().uuid()).isNull();
+        assertThat(fields.field("missing").optional().date()).isNull();
+        assertThat(fields.field("nothing").optional().date()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"zero", "five", "fraction", "yes", "no", "emptyArray", "array", "emptyObject", "object"})
+    void nonTextOptionalValues_areViolationsWithoutTheValueOrCause(String name) {
+        JsonFields fields = nodes();
+        String message = "недопустимое значение поля data." + name;
+        assertThatThrownBy(() -> fields.field(name).optional().text()).isInstanceOf(ContractViolationException.class)
+                .hasMessage(message).hasNoCause();
+        assertThatThrownBy(() -> fields.field(name).optional().uuid()).hasMessage(message).hasNoCause();
+        assertThatThrownBy(() -> fields.field(name).optional().date()).hasMessage(message).hasNoCause();
+    }
+
+    @Test
+    void blankStrings_stayTextAndFailGuidAndDateFormat() {
+        JsonFields fields = nodes();
+        assertThat(fields.field("blank").optional().text()).isEmpty();
+        assertThat(fields.field("spaces").optional().text()).isEqualTo("   ");
+        assertThatThrownBy(() -> fields.field("blank").optional().uuid())
+                .isInstanceOf(ContractViolationException.class)
+                .hasMessage("недопустимое значение поля data.blank").hasNoCause();
+        assertThatThrownBy(() -> fields.field("spaces").optional().uuid())
+                .hasMessage("недопустимое значение поля data.spaces").hasNoCause();
+        assertThatThrownBy(() -> fields.field("blank").optional().date())
+                .hasMessage("недопустимое значение поля data.blank").hasCauseInstanceOf(DateTimeParseException.class);
+        assertThatThrownBy(() -> fields.field("spaces").optional().date())
+                .hasMessage("недопустимое значение поля data.spaces").hasCauseInstanceOf(DateTimeParseException.class);
+    }
+
+    private static JsonFields nodes() {
+        String body = """
+                {"data": {"nothing": null, "blank": "", "spaces": "   ", "zero": 0, "five": 5, "fraction": 12.34,
+                          "yes": true, "no": false, "emptyArray": [], "array": ["вымышленная"], "emptyObject": {},
+                          "object": {"fio": "вымышленная"}}}
+                """;
+        return new MessageBodies(JsonMapper.builder().build()).data(body);
     }
 
     @Test

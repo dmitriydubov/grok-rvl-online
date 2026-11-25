@@ -18,6 +18,7 @@ import ru.projectx.contracts.service.usk.UskResultLayout;
 import ru.projectx.contracts.support.LmPolicyResultBodies;
 import ru.projectx.contracts.support.UskResultBodies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class UskResultParserTest {
 
@@ -56,6 +57,29 @@ class UskResultParserTest {
                     .extracting(result -> ((UskResult.Issued) result).documents()).isEqualTo(List.of());
             assertThat(parser.parse(LmPolicyResultBodies.issued().withEmptyDocuments().toJson()))
                     .extracting(result -> ((UskResult.Issued) result).documents()).isEqualTo(List.of());
+        }
+
+        @Test
+        void nonTextUskNumberWhenIssued_isViolationNamingTheField() {
+            JsonMapper json = JsonMapper.builder().build();
+            ObjectNode root = (ObjectNode) json.readTree(LmPolicyResultBodies.issued().toJson());
+            ((ObjectNode) root.get("data")).put("policy_usk_number", 5);
+
+            assertThatThrownBy(() -> parser.parse(json.writeValueAsString(root)))
+                    .isInstanceOf(ContractViolationException.class)
+                    .hasMessage("недопустимое значение поля data.policy_usk_number")
+                    .hasNoCause();
+        }
+
+        @Test
+        void nonTextUskNumberWhenFailed_isIgnored() {
+            JsonMapper json = JsonMapper.builder().build();
+            ObjectNode root = (ObjectNode) json.readTree(LmPolicyResultBodies.failed().toJson());
+            ((ObjectNode) root.get("data")).set("policy_usk_number", json.createArrayNode());
+
+            assertThat(parser.parse(json.writeValueAsString(root))).isEqualTo(new UskResult.Failed(
+                    UUID.fromString(LmPolicyResultBodies.POLICY_ID), "INSURED_NOT_COVERED",
+                    "Стенд: застрахованный не входит в корпоративный договор"));
         }
 
         @Test

@@ -13,6 +13,7 @@ import ru.projectx.contracts.message.task.ContractTaskCancellation;
 import ru.projectx.contracts.service.inbox.parse.MessageBodies;
 import ru.projectx.contracts.support.TaskBodies;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class TaskCancellationParserTest {
 
@@ -32,6 +33,18 @@ class TaskCancellationParserTest {
     void commentIsOptional() {
         assertThat(parser.parse(TaskBodies.cancelled("EXPIRED").withoutDataField("cancel_comment").toJson())
                 .cancelComment()).isNull();
+    }
+
+    @Test
+    void nonTextComment_isViolationNamingTheField() {
+        JsonMapper json = JsonMapper.builder().build();
+        ObjectNode root = (ObjectNode) json.readTree(TaskBodies.cancelled("EXPIRED").toJson());
+        ((ObjectNode) root.get("data")).set("cancel_comment", json.createObjectNode().put("метка", "вымышленная"));
+
+        assertThatThrownBy(() -> parser.parse(json.writeValueAsString(root)))
+                .isInstanceOf(ContractViolationException.class)
+                .hasMessage("недопустимое значение поля data.cancel_comment")
+                .hasNoCause();
     }
 
     @Test
