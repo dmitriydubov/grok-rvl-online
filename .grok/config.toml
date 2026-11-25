@@ -1,0 +1,21 @@
+# .grok/config.toml — Grok Build в репозитории под набором gauntlet. Файл человека, как .claude/settings.json.
+# Проект может задать здесь только [mcp_servers], [plugins] и [permission]; остальное — в ~/.grok/config.toml.
+# Читается только в доверенной папке (grok --trust или /hooks-trust).
+
+[permission]
+# Пути человека (gauntlet/CLAUDE.md, правило 1). Правило Edit(...) закрывает правку и запись файлов инструментами
+# Grok (в правилах Grok Edit(...) и Write(...) — один фильтр), а при таком правиле Grok проверяет и shell-команды
+# записи (перенаправления, cp, mv, tee…). Второй слой поверх guard.py: deny сильнее allow и always-approve.
+# Цена: админ-правку набора через Grok эти строки тоже не пропустят (A.6, п. 3).
+deny = [
+  "Edit(gauntlet/**)",
+  "Edit(.claude/**)",
+  "Edit(.grok/**)",
+  "Edit(CLAUDE.md)",
+  "Edit(AGENTS.md)",
+  "Edit(.github/workflows/gauntlet.yml)",
+  "Edit(.github/workflows/gauntlet-kit.yml)",
+  "Edit(CODEOWNERS)",
+  "Edit(.github/CODEOWNERS)",
+  "Edit(.gitlab/CODEOWNERS)",
+]
