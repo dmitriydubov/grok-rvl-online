@@ -20,8 +20,9 @@ Build заменяет механизмы Claude Code, и задаёт прав�
 2. Текст `gauntlet/CLAUDE.md` должен быть у тебя в контексте целиком. Если его нет (ссылка не загрузилась) —
    прочитай файл сам от начала до конца, прежде чем что-то делать.
 3. Проверь готовность окружения и при необходимости настрой его сам без остановки на вопрос владельцу: `docker info`
-   (на macOS проверь `PATH` `/opt/homebrew/bin:/usr/local/bin`, Colima и Lima — `limactl list` / `limactl start docker` и
-   сокет `~/.lima/docker/sock/docker.sock`; на Linux при отсутствии Docker и наличии прав установи `docker.io` через
+   (на macOS проверь `PATH` `/opt/homebrew/bin:/usr/local/bin`, Colima и Lima — `limactl list` / `limactl start docker`,
+   `DOCKER_HOST=$(limactl list <vm> --format 'unix://{{.Dir}}/sock/docker.sock')` и при rootless Lima
+   `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/run/user/<uid>/docker.sock` по `limactl shell <vm> id -u`; на Linux при отсутствии Docker и наличии прав установи `docker.io` через
    `apt-get` / `sudo -n apt-get`, подними `dockerd --host=unix:///var/run/docker.sock` в фоне и дождись `docker info`; при
    `CgroupDriver=none` / `freezer not supported` на `docker pause` подними `nohup python3 -I -B gauntlet/hooks/docker_pause_shim.py /tmp/docker-pause-shim.sock >/tmp/docker-pause-shim.log 2>&1 &`
    и передавай `DOCKER_HOST=unix:///tmp/docker-pause-shim.sock`; **не вызывай `./gradlew --stop`**, если машина делит
@@ -55,7 +56,7 @@ Build заменяет механизмы Claude Code, и задаёт прав�
 | Stop-хук гоняет `gauntletFast` | тот же `stop_gate.py` через прослойку (незакоммиченный черновик фич пропускает, а после коммита `spec:` запускает полный `gauntletFast`); Grok продлевает ход не больше 8 раз за ход |
 | SubagentStop-хук hardener'а (`.claude/settings.json`) | тот же хук `subagent-stop` в `.grok/hooks/gauntlet.json` (распознаёт роль по `subagentType`, `description` или `[ROLE: …]`) |
 | строка статуса SessionStart | файл `grok-status.txt` (раздел 0) |
-| Stop-хук облачной платформы Claude (`stop-hook-git-check.sh`) и переход шагов 3 → 4 → 5–8 | платформенного хука нет; после утверждения спецификации владельцем («да» / ответы шага 3) закоммить `spec:`, запушь ветку и **в этом же ходе без повторной остановки** выполни шаги 5–8 до PR |
+| Stop-хук облачной платформы Claude (`stop-hook-git-check.sh`) и переход шагов 3 → 4 → 5–8 | платформенного хука нет; после утверждения спецификации владельцем («да» / ответы шага 3) закоммить `spec:`, запушь ветку и **в этом же ходе без повторной остановки** выполни шаги 5–8 до PR (с промежуточным `git push origin HEAD` после шагов 5 и 7) |
 | строка «Ответ Claude Code на комментарий <ревьюер>» | «Ответ Grok Build на комментарий <ревьюер>», если владелец не решил иначе |
 
 Сабагенты в Grok:
