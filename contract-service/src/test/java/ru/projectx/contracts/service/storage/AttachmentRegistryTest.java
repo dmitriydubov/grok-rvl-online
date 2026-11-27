@@ -81,7 +81,7 @@ class AttachmentRegistryTest {
 
         assertThatThrownBy(() -> registry.accepted(target, Uploads.CONTENT_HASH))
                 .isInstanceOf(RequestCancelledException.class).hasMessageContaining(Uploads.REQUEST.toString());
-        verifyNoInteractions(documents);
+        verify(documents).findByAttachmentAttachmentId(Uploads.ATTACHMENT);
     }
 
     @Test
@@ -160,6 +160,20 @@ class AttachmentRegistryTest {
 
         when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT))
                 .thenReturn(Optional.of(consent(Uploads.POLICY, Uploads.FAMILY_MEMBER, Uploads.CONTENT_HASH)));
+
+        assertThatThrownBy(() -> registry.accepted(AttachmentTarget.certificate(Uploads.jpeg()), Uploads.CONTENT_HASH))
+                .isInstanceOf(AttachmentConflictException.class);
+    }
+
+    @Test
+    void deletedAttachmentOfACancelledRequest_isConflictBeforeTheCancellation() {
+        IssuanceRequest cancelled = IssuanceRequest.start(Uploads.REQUEST, NOW);
+        cancelled.cancel(NOW);
+        when(requests.findById(Uploads.REQUEST)).thenReturn(Optional.of(cancelled));
+        PrintedForm deletedCert = PrintedForm.receivedAttachment(PrintedFormType.MEDICAL_CERTIFICATE,
+                new DocumentAttachment(Uploads.REQUEST, Uploads.PARTICIPANT, null, null, Uploads.ATTACHMENT, NOW, "req-1"),
+                FILE, NOW.minusSeconds(300));
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.of(deletedCert));
 
         assertThatThrownBy(() -> registry.accepted(AttachmentTarget.certificate(Uploads.jpeg()), Uploads.CONTENT_HASH))
                 .isInstanceOf(AttachmentConflictException.class);

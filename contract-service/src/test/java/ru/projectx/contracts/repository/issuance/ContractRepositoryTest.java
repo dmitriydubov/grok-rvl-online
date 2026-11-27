@@ -238,6 +238,34 @@ class ContractRepositoryTest {
         assertThat(next).isEqualTo(1);
     }
 
+    @Test
+    void contractsOfTheParticipant_includeEveryStatusAndSkipTheOtherParticipant() {
+        UUID issued = saveAndMark(SPOUSE, "DKM-2026-000101", "ISSUED");
+        UUID cancelled = saveAndMark(SPOUSE, "DKM-2026-000102", "CANCELLED");
+        UUID failed = saveAndMark(SPOUSE, "DKM-2026-000103", "ERROR");
+        Contract draft = contract(SPOUSE, "DKM-2026-000104");
+        draft.offerDraft();
+        Contract child = contract(CHILD, "DKM-2026-000105");
+        transaction.executeWithoutResult(status -> {
+            contracts.save(draft);
+            contracts.save(child);
+        });
+
+        assertThat(contracts.findByRequestIndividualRequestIdAndInsuredParticipantId(REQUEST, SPOUSE))
+                .extracting(Contract::id)
+                .containsExactlyInAnyOrder(issued, cancelled, failed, draft.id());
+        assertThat(contracts.findByRequestIndividualRequestIdAndInsuredParticipantId(REQUEST, CHILD))
+                .extracting(Contract::id)
+                .containsExactly(child.id());
+    }
+
+    private UUID saveAndMark(UUID participant, String number, String status) {
+        UUID id = transaction.execute(tx -> contracts.save(contract(participant, number)).id());
+        jdbc.sql("update contracts set status = cast(:status as contract_status) where id = :id")
+                .param("status", status).param("id", id).update();
+        return id;
+    }
+
     private static Contract contract(UUID participant, String number) {
         return Contract.open(new ContractDraft(number, TERMS, participant, new BigDecimal("34000.00")), NOW);
     }

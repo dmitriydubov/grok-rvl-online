@@ -53,4 +53,7 @@ public interface OutboxMessageRepository extends JpaRepository<OutboxMessage, UU
                            limit :batch)
             """, nativeQuery = true)
     int eraseFinishedPayloadsCreatedBefore(@Param("cutoff") Instant cutoff, @Param("batch") int batch);
+
+    boolean existsByCorrelationIdAndAggregateTypeAndEventTypeAndAggregateIdIn(UUID correlationId, String aggregateType,
+            String eventType, Collection<UUID> aggregateIds);
 }

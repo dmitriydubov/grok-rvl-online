@@ -1,8 +1,10 @@
 package ru.projectx.contracts.service.integration.storage;
 
 import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.StatObjectArgs;
 import io.minio.errors.ErrorResponseException;
 import io.minio.errors.MinioException;
@@ -44,8 +46,27 @@ public class MinioCertificateStore implements CertificateStore {
     @Override
     public void verifyPresent(String key) {
         StatObjectArgs object = StatObjectArgs.builder().bucket(bucket).object(key).build();
+        read(() -> client.statObject(object));
+    }
+
+    @Override
+    public InputStream open(String key) {
+        GetObjectArgs object = GetObjectArgs.builder().bucket(bucket).object(key).build();
+        return read(() -> client.getObject(object));
+    }
+
+    @Override
+    public void remove(String key) {
+        RemoveObjectArgs object = RemoveObjectArgs.builder().bucket(bucket).object(key).build();
+        read(() -> {
+            client.removeObject(object);
+            return null;
+        });
+    }
+
+    private <T> T read(Read<T> call) {
         try {
-            client.statObject(object);
+            return call.get();
         } catch (ErrorResponseException refused) {
             throw refusal(refused);
         } catch (MinioException | IOException | GeneralSecurityException | RuntimeException failure) {
@@ -99,5 +120,10 @@ public class MinioCertificateStore implements CertificateStore {
         } catch (IOException unreadable) {
             throw new UncheckedIOException("файл справки не прочитан", unreadable);
         }
+    }
+
+    @FunctionalInterface
+    private interface Read<T> {
+        T get() throws MinioException, IOException, GeneralSecurityException;
     }
 }

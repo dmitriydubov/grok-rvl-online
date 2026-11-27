@@ -122,6 +122,38 @@ class OutboxMessageRepositoryTest {
                 .containsExactlyInAnyOrder(UUID.fromString(THIRD), UUID.fromString(FOURTH));
     }
 
+    @Test
+    void submissionRecord_isFoundInEveryStatusAndAfterThePayloadIsErased() {
+        UUID contractId = UUID.fromString("0b6c1d2e-7f3a-4b5c-9d8e-1f2a3b4c5d6e");
+        UUID otherContract = UUID.fromString("1c7d3e5f-8a4b-4d6e-9f50-2b3c4d5e6f70");
+        transaction.executeWithoutResult(status -> {
+            messages.save(submission(FIRST, contractId, NOW.minusSeconds(3))).markPublished(NOW);
+            messages.save(submission(SECOND, contractId, NOW.minusSeconds(2))).markFailed("отказ");
+            messages.save(submission(THIRD, otherContract, NOW));
+            messages.save(message(FOURTH, NOW));
+        });
+        transaction.executeWithoutResult(status -> messages.eraseFinishedPayloadsCreatedBefore(NOW.minusSeconds(1), 10));
+
+        assertThat(exists(REQUEST, contractId)).isTrue();
+        assertThat(messages.findAll()).filteredOn(message -> contractId.equals(message.aggregateId()))
+                .filteredOn(message -> "PUBLISHED".equals(message.status().name()))
+                .singleElement()
+                .satisfies(message -> assertThat(message.payload()).isEmpty());
+        assertThat(exists(REQUEST, otherContract)).isTrue();
+        assertThat(exists(UUID.randomUUID(), contractId)).isFalse();
+    }
+
+    private boolean exists(UUID correlationId, UUID contractId) {
+        return messages.existsByCorrelationIdAndAggregateTypeAndEventTypeAndAggregateIdIn(correlationId, "CONTRACT",
+                "KmContractSubmitted", List.of(contractId));
+    }
+
+    private static OutboxMessage submission(String messageId, UUID contractId, Instant createdAt) {
+        return OutboxMessage.compose(new OutboxDraft("CONTRACT", contractId,
+                new MessageEnvelope(UUID.fromString(messageId), REQUEST, "rvl.km-contract.submitted",
+                        "KmContractSubmitted", 1), "{\"data\": {\"n\": 1}}"), createdAt);
+    }
+
     private List<String> dueOf(Set<String> eventTypes, int limit) {
         return ids(messages.findDueOf(eventTypes, NOW, Limit.of(limit)));
     }

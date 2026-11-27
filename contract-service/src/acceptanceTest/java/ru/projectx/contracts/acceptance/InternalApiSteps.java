@@ -86,12 +86,27 @@ public class InternalApiSteps {
                 .orElseThrow(() -> new AssertionError("в ответе нет заголовка X-Request-Id")), status);
     }
 
+    @Тогда("в журнале Договоров есть запись о вызове DELETE с requestId из ответа и кодом ответа {int}")
+    public void deleteJournaledWithAnsweredRequestId(int status) {
+        deleteJournaled(calls.last().requestId()
+                .orElseThrow(() -> new AssertionError("в ответе нет заголовка X-Request-Id")), status);
+    }
+
+    @Тогда("в журнале Договоров есть запись о вызове DELETE с requestId {string} и кодом ответа {int}")
+    public void deleteJournaled(String requestId, int status) {
+        methodJournaled("DELETE", requestId, status);
+    }
+
     @Тогда("в журнале Договоров есть запись о вызове с requestId {string} и кодом ответа {int}")
     public void callJournaled(String requestId, int status) {
+        methodJournaled("POST", requestId, status);
+    }
+
+    private void methodJournaled(String method, String requestId, int status) {
         assertThat(journal.events()).as("записи журнала о вызове с requestId %s", requestId)
                 .filteredOn(event -> requestId.equals(event.getMDCPropertyMap().get(REQUEST_ID_KEY)))
                 .extracting(ILoggingEvent::getFormattedMessage)
-                .anyMatch(message -> message.startsWith("синхронный вызов POST ")
+                .anyMatch(message -> message.startsWith("синхронный вызов " + method + " ")
                         && message.endsWith(" завершён с кодом " + status));
     }
 

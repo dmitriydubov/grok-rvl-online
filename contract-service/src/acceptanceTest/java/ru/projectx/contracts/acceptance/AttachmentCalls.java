@@ -30,9 +30,14 @@ public class AttachmentCalls {
     record Answer(int status, Optional<String> requestId, Optional<String> sentRequestId, String body) {
     }
 
+    record BinaryAnswer(int status, byte[] body, Optional<String> contentType, Optional<Long> contentLength,
+            Optional<String> etag) {
+    }
+
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
     private final JsonMapper json = JsonMapper.builder().build();
     private final List<Answer> answers = new ArrayList<>();
+    private final List<BinaryAnswer> binaries = new ArrayList<>();
     private final Map<String, byte[]> accepted = new HashMap<>();
     private final Map<String, byte[]> sent = new HashMap<>();
     private final String base;
@@ -103,5 +108,25 @@ public class AttachmentCalls {
         HttpResponse<String> response = http.send(call.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         answers.add(new Answer(response.statusCode(), response.headers().firstValue(REQUEST_ID), requestId,
                 response.body()));
+    }
+
+    void read(String method, String path, Optional<String> requestId) throws IOException, InterruptedException {
+        HttpRequest.Builder call = HttpRequest.newBuilder(URI.create(base + path)).timeout(TIMEOUT)
+                .method(method, HttpRequest.BodyPublishers.noBody());
+        requestId.ifPresent(value -> call.header(REQUEST_ID, value));
+        HttpResponse<byte[]> response = http.send(call.build(), HttpResponse.BodyHandlers.ofByteArray());
+        byte[] body = response.body();
+        answers.add(new Answer(response.statusCode(), response.headers().firstValue(REQUEST_ID), requestId,
+                new String(body, StandardCharsets.UTF_8)));
+        binaries.add(new BinaryAnswer(response.statusCode(), body, response.headers().firstValue("Content-Type"),
+                response.headers().firstValue("Content-Length").map(Long::valueOf),
+                response.headers().firstValue("ETag")));
+    }
+
+    BinaryAnswer lastBinary() {
+        if (binaries.isEmpty()) {
+            throw new AssertionError("в сценарии ещё не было чтения или удаления вложения");
+        }
+        return binaries.getLast();
     }
 }

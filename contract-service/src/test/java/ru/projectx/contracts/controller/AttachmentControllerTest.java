@@ -40,7 +40,9 @@ import ru.projectx.contracts.exception.RequestCancelledException;
 import ru.projectx.contracts.exception.RequestNotFoundException;
 import ru.projectx.contracts.exception.StorageUnavailableException;
 import ru.projectx.contracts.service.RequestIds;
+import ru.projectx.contracts.service.storage.AttachmentDeletes;
 import ru.projectx.contracts.service.storage.AttachmentMetrics;
+import ru.projectx.contracts.service.storage.AttachmentReads;
 import ru.projectx.contracts.service.storage.AttachmentUploads;
 import ru.projectx.contracts.service.storage.CertificateUpload;
 import tools.jackson.databind.PropertyNamingStrategies;
@@ -58,7 +60,8 @@ class AttachmentControllerTest {
     private final AttachmentUploads uploads = mock(AttachmentUploads.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final AttachmentMetrics metrics = new AttachmentMetrics(meters);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentController(uploads))
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentController(uploads,
+            mock(AttachmentReads.class), mock(AttachmentDeletes.class)))
             .setControllerAdvice(new RequestFormatAdvice(metrics), new DomainErrorAdvice(), new UnexpectedErrorAdvice())
             .setMessageConverters(new JacksonJsonHttpMessageConverter(JsonMapper.builder()
                     .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build()))

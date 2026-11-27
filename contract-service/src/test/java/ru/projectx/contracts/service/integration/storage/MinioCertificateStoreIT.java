@@ -11,6 +11,7 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
@@ -71,6 +72,37 @@ class MinioCertificateStoreIT {
         store.store(file, () -> new ByteArrayInputStream(CONTENT));
 
         assertThatCode(() -> store.verifyPresent(file.key())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void open_returnsTheStoredBytes() throws Exception {
+        StoredFile file = new StoredFile("certificates/open/k16b.jpg", "ab", CONTENT.length, "image/jpeg");
+        MinioCertificateStore store = new MinioCertificateStore(client, BUCKET);
+        store.store(file, () -> new ByteArrayInputStream(CONTENT));
+
+        try (InputStream opened = store.open(file.key())) {
+            assertThat(opened.readAllBytes()).isEqualTo(CONTENT);
+        }
+    }
+
+    @Test
+    void remove_dropsTheObjectAndASecondRemoveLeavesItAbsent() throws Exception {
+        StoredFile file = new StoredFile("certificates/remove/k16b.jpg", "ab", CONTENT.length, "image/jpeg");
+        MinioCertificateStore store = new MinioCertificateStore(client, BUCKET);
+        store.store(file, () -> new ByteArrayInputStream(CONTENT));
+
+        store.remove(file.key());
+        assertThatThrownBy(() -> store.open(file.key())).isInstanceOf(CertificateMissingException.class);
+        assertThatCode(() -> store.remove(file.key())).doesNotThrowAnyException();
+    }
+
+    @Test
+    void openAndRemove_ofAMissingBucket_areStorageUnavailable() {
+        MinioCertificateStore store = new MinioCertificateStore(client, "contracts-missing");
+
+        assertThatThrownBy(() -> store.open("certificates/none/1.jpg")).isInstanceOf(StorageUnavailableException.class);
+        assertThatThrownBy(() -> store.remove("certificates/none/1.jpg"))
+                .isInstanceOf(StorageUnavailableException.class);
     }
 
     @Test

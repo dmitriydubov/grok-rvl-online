@@ -16,6 +16,18 @@
 
 ### Добавлено
 
+- Потоковая выдача содержимого вложения `GET /internal/v1/attachments/{attachment_id}/content`: байты активного
+  вложения (`MEDICAL_CERTIFICATE` или `PD_CONSENT`) из общего хранилища S3 без сборки файла в памяти, с `Content-Type`,
+  `Content-Length` и `ETag` по хэшу из реестра. Неизвестное, удалённое и печатная форма 1С — `404 ATTACHMENT_NOT_FOUND`
+  без обращения к S3; пропавший объект живого бакета — тот же 404 и WARN без ключа объекта; недоступное хранилище —
+  `503 STORAGE_UNAVAILABLE`.
+- Мягкое удаление вложения `DELETE /internal/v1/attachments/{attachment_id}`: объект удаляется из S3 вне транзакции
+  базы, в реестре проставляются момент и идентификатор запроса. Повтор, неизвестный идентификатор и печатная форма
+  отвечают `204` без S3. Справку, уже переданную в 1С:УСК (`SUBMITTED`/`ISSUED` или запись `KmContractSubmitted`),
+  удалить нельзя — `409 ATTACHMENT_LOCKED`. Согласие `PD_CONSENT` этим запретом не ограничено. Занятая строка договора
+  — `503 SERVICE_UNAVAILABLE`, отказ хранилища — `503 STORAGE_UNAVAILABLE` без пометки удаления.
+- Маршрут `internal/v1/attachments` в `devops/test/helm/values.yaml`. Учётной записи S3 нужны права `GetObject` и
+  `DeleteObject` вдобавок к записи и проверке объекта.
 - Синхронная загрузка согласий родственников на обработку персональных данных (ПДн)
   `POST /internal/v1/policies/{policy_id}/family-members/{family_member_id}/consents` (multipart: `attachment_id`, `file`)
   с теми же допустимыми MIME-типами (`image/jpeg`, `image/png`, `application/pdf`), пределом размера, хранением в общем

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import ru.projectx.contracts.entity.document.DocumentAttachments;
 import ru.projectx.contracts.entity.document.PrintedForm;
 import ru.projectx.contracts.entity.document.StoredFile;
 import ru.projectx.contracts.exception.AttachmentConflictException;
@@ -25,9 +26,12 @@ public class AttachmentRegistry {
 
     @Transactional(readOnly = true)
     public <R> Optional<R> accepted(AttachmentTarget<R> target, String fileHash) {
+        Optional<PrintedForm> existing = documents.findByAttachmentAttachmentId(target.attachmentId());
+        if (existing.filter(AttachmentRegistry::removed).isPresent()) {
+            throw new AttachmentConflictException(target.attachmentId());
+        }
         target.checkOpen(requests);
-        return documents.findByAttachmentAttachmentId(target.attachmentId())
-                .map(existing -> sameUpload(existing, target, fileHash));
+        return existing.map(found -> sameUpload(found, target, fileHash));
     }
 
     @Transactional
@@ -36,6 +40,10 @@ public class AttachmentRegistry {
         PrintedForm attachment = PrintedForm.receivedAttachment(target.docType(), target.owner(), file,
                 clock.instant());
         return target.response(documents.saveAndFlush(attachment));
+    }
+
+    private static boolean removed(PrintedForm form) {
+        return form.attachment().filter(DocumentAttachments::isActive).isEmpty();
     }
 
     private static <R> R sameUpload(PrintedForm existing, AttachmentTarget<R> target, String fileHash) {
