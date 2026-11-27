@@ -183,6 +183,7 @@ public class AttachmentExchangeSteps {
 
     @Тогда("имя файла {string} и текстовая фраза вложения {string} не попали ни в журнал Договоров, ни в метрики")
     public void phraseStaysOut(String fileName, String attachment) throws IOException, InterruptedException {
+        assertThat(calls.sentFileName(attachment)).isEqualTo(fileName);
         byte[] sent = calls.sentContent(attachment);
         assertThat(sent[sent.length - 1]).isEqualTo(MARKER);
         String phrase = new String(sent, 0, sent.length - 1, StandardCharsets.UTF_8);
@@ -228,6 +229,8 @@ public class AttachmentExchangeSteps {
 
     @Тогда("в журнале Договоров есть запись уровня WARN об отсутствующем объекте вложения {string} без ключа объекта, без имени файла {string} и без фразы {string}")
     public void missingObjectWarned(String attachment, String fileName, String phrase) {
+        assertThat(calls.sentFileName(attachment)).isEqualTo(fileName);
+        assertThat(new String(calls.sentContent(attachment), StandardCharsets.UTF_8)).isEqualTo(phrase);
         String expected = "объект вложения " + attachment + " в хранилище справок не найден";
         String key = certificates.byAttachment(attachment).key();
         assertThat(journal.events()).filteredOn(event -> event.getLevel() == Level.WARN)

@@ -40,6 +40,7 @@ public class AttachmentCalls {
     private final List<BinaryAnswer> binaries = new ArrayList<>();
     private final Map<String, byte[]> accepted = new HashMap<>();
     private final Map<String, byte[]> sent = new HashMap<>();
+    private final Map<String, String> names = new HashMap<>();
     private final String base;
 
     public AttachmentCalls(@LocalServerPort int port) {
@@ -89,9 +90,17 @@ public class AttachmentCalls {
                 .orElseThrow(() -> new AssertionError("вложение " + attachment + " не отправлялось в этом сценарии"));
     }
 
+    String sentFileName(String attachment) {
+        return Optional.ofNullable(names.get(attachment))
+                .orElseThrow(() -> new AssertionError("вложение " + attachment + " не отправлялось в этом сценарии"));
+    }
+
     private void remember(AttachmentRequest request, int status) {
         request.attachmentPart().ifPresent(attachment -> request.filePart().ifPresent(file -> {
             sent.put(attachment.value(), file.content());
+            if (file.fileName() != null) {
+                names.put(attachment.value(), file.fileName());
+            }
             if (status == OK) {
                 accepted.put(attachment.value(), file.content());
             }

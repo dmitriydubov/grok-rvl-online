@@ -2,6 +2,7 @@ package ru.projectx.contracts.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -107,6 +108,8 @@ class AttachmentExchangeControllerTest {
                 .andExpect(status().isNoContent())
                 .andExpect(header().string(RequestIds.HEADER, TRACE))
                 .andExpect(content().string(""));
+
+        verify(deletions).delete(ATTACHMENT);
     }
 
     @Test
