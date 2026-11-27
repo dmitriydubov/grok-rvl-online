@@ -71,6 +71,12 @@ public class InternalApiSteps {
         assertThat(details.isMissingNode() || details.isEmpty()).as("нарушения %s", details).isTrue();
     }
 
+    @Тогда("последний запрос согласия ушёл на члена семьи {string} полиса {string}")
+    public void consentRequestWentTo(String member, String policy) {
+        assertThat(calls.last().path()).as("путь запроса согласия")
+                .isEqualTo("/internal/v1/policies/" + policy + "/family-members/" + member + "/consents");
+    }
+
     @Тогда("в ответе Договоров заголовок X-Request-Id — {string}")
     public void requestIdEchoed(String expected) {
         assertThat(calls.last().requestId()).contains(expected);
