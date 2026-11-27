@@ -295,8 +295,20 @@ public class AttachmentRemovalSteps {
         }
         if (!storage.bucketExists(settings.bucket())) {
             storage.recreateBucket(settings.bucket());
+            restoreUploadedObjects();
         }
         storageSteps.storageBack();
+    }
+
+    private void restoreUploadedObjects() throws Exception {
+        List<String[]> rows = jdbc.sql("""
+                select attachment_id::text as attachment, file_key
+                  from contract_documents
+                 where file_key is not null
+                """).query((row, index) -> new String[] {row.getString("attachment"), row.getString("file_key")}).list();
+        for (String[] row : rows) {
+            storage.putObject(settings.bucket(), row[1], calls.acceptedContent(row[0]));
+        }
     }
 
     @Тогда("объект вложения {string} не удалён сервисом при недоступности {string}")

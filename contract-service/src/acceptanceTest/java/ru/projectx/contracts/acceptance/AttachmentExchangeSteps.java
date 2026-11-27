@@ -147,7 +147,7 @@ public class AttachmentExchangeSteps {
         AttachmentCalls.BinaryAnswer answer = calls.lastBinary();
         assertThat(answer.status()).isEqualTo(status);
         assertThat(answer.body()).isEqualTo(calls.acceptedContent(attachment));
-        assertThat(answer.contentType()).contains(type);
+        assertThat(answer.contentType().orElseThrow()).isEqualTo(type);
         assertThat(answer.contentLength()).contains((long) size);
         assertThat(answer.etag()).contains(etag);
         assertThat(etag).isEqualTo("\"" + hash + "\"");
