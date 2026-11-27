@@ -3,9 +3,15 @@ package ru.projectx.contracts.repository.issuance;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.sql.Connection;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import javax.sql.DataSource;
+import liquibase.Liquibase;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +22,7 @@ import ru.projectx.contracts.entity.issuance.DocumentKind;
 import ru.projectx.contracts.entity.issuance.IssuanceRequest;
 import ru.projectx.contracts.entity.document.ParticipantAttachment;
 import ru.projectx.contracts.entity.document.PrintedForm;
+import ru.projectx.contracts.entity.document.ReceivedDocuments;
 import ru.projectx.contracts.entity.document.PrintedFormType;
 import ru.projectx.contracts.entity.issuance.RequestParticipant;
 import ru.projectx.contracts.entity.document.StoredFile;
@@ -43,6 +50,9 @@ class PrintedFormRepositoryTest {
 
     @Autowired
     private JdbcClient jdbc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @BeforeEach
     void knownRequest() {
@@ -84,11 +94,15 @@ class PrintedFormRepositoryTest {
     }
 
     @Test
-    void certificateOfAnUnknownRequest_isRefusedByTheDatabase() {
-        ParticipantAttachment stranger = new ParticipantAttachment(UUID.randomUUID(), PARTICIPANT, UUID.randomUUID());
+    void certificateOfAnUnknownRequest_isStored() {
+        UUID request = UUID.randomUUID();
+        UUID attachment = UUID.randomUUID();
+        ParticipantAttachment stranger = new ParticipantAttachment(request, PARTICIPANT, attachment);
 
-        assertThatThrownBy(() -> documents.saveAndFlush(PrintedForm.receivedCertificate(stranger, FILE, NOW)))
-                .isInstanceOf(DataIntegrityViolationException.class);
+        documents.saveAndFlush(PrintedForm.receivedCertificate(stranger, new StoredFile(FILE.key(), FILE.hash(),
+                FILE.size(), FILE.contentType()), NOW));
+
+        assertThat(documents.findByAttachmentAttachmentId(attachment)).isPresent();
     }
 
     @Test
@@ -99,7 +113,7 @@ class PrintedFormRepositoryTest {
         assertThatThrownBy(() -> insert("individual_request_id, attachment_id, file_key, file_hash, file_size, content_type",
                 ":request, :attachment, 'k', 'h', 1, 'image/png'"))
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("ck_contract_documents_participant_attachment");
+                .hasMessageContaining("ck_contract_documents_medical_certificate");
     }
 
     @Test
@@ -114,7 +128,7 @@ class PrintedFormRepositoryTest {
                         + "'k', 'h', 1, 'image/png')")
                 .param("request", REQUEST).param("participant", PARTICIPANT).param("attachment", ATTACHMENT).update())
                 .isInstanceOf(DataIntegrityViolationException.class)
-                .hasMessageContaining("ck_contract_documents_certificate_type");
+                .hasMessageContaining("ck_contract_documents_printed_form");
     }
 
     @Test
@@ -122,6 +136,148 @@ class PrintedFormRepositoryTest {
         assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, file_key) "
                         + "values (gen_random_uuid(), 'FINAL', 'POLICY', 1, now(), 'k')").update())
                 .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_contract_documents_single_owner");
+    }
+
+    @Test
+    void consent_isStoredByPolicyAndFamilyMember() {
+        UUID policy = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        UUID attachment = UUID.randomUUID();
+
+        documents.saveAndFlush(ReceivedDocuments.consent(
+                new ru.projectx.contracts.entity.document.ConsentBinding(policy, member), attachment, FILE, NOW));
+
+        assertThat(jdbc.sql("select policy_id, family_member_id, doc_type::text from contract_documents "
+                        + "where attachment_id = :attachment")
+                .param("attachment", attachment)
+                .query((row, index) -> row.getObject("policy_id", UUID.class) + " " + row.getObject("family_member_id",
+                        UUID.class) + " " + row.getString("doc_type")).single())
+                .isEqualTo(policy + " " + member + " PD_CONSENT");
+    }
+
+    @Test
+    void twoOwnersOrNone_areRefused() {
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at) "
+                        + "values (gen_random_uuid(), 'FINAL', 'POLICY', 1, now())").update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_single_owner");
+        UUID contract = insertContract();
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, "
+                        + "contract_id, individual_request_id, participant_id, attachment_id, file_key, file_hash, "
+                        + "file_size, content_type) values (gen_random_uuid(), 'FINAL', 'MEDICAL_CERTIFICATE', 1, now(), "
+                        + ":contract, :request, :participant, :attachment, 'k', 'h', 1, 'image/png')")
+                .param("contract", contract).param("request", REQUEST).param("participant", PARTICIPANT)
+                .param("attachment", ATTACHMENT).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_single_owner");
+    }
+
+    @Test
+    void mixedCertificateAndConsentOwners_areRefused() {
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, "
+                        + "individual_request_id, participant_id, attachment_id, policy_id, file_key, file_hash, "
+                        + "file_size, content_type) values (gen_random_uuid(), 'FINAL', 'MEDICAL_CERTIFICATE', 1, now(), "
+                        + ":request, :participant, :attachment, gen_random_uuid(), 'k', 'h', 1, 'image/png')")
+                .param("request", REQUEST).param("participant", PARTICIPANT).param("attachment", ATTACHMENT).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_medical_certificate");
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, "
+                        + "policy_id, family_member_id, attachment_id, participant_id, file_key, file_hash, file_size, "
+                        + "content_type) values (gen_random_uuid(), 'FINAL', 'PD_CONSENT', 1, now(), gen_random_uuid(), "
+                        + "gen_random_uuid(), :attachment, :participant, 'k', 'h', 1, 'image/png')")
+                .param("participant", PARTICIPANT).param("attachment", ATTACHMENT).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_pd_consent");
+    }
+
+    @Test
+    void deletionMarkOnAPrintedFormOrHalfFilled_isRefused() {
+        UUID contract = insertContract();
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, contract_id, kind, doc_type, version, "
+                        + "created_at, deleted_at, deleted_request_id) values (gen_random_uuid(), :contract, 'FINAL', "
+                        + "'CONTRACT', 1, now(), now(), 'req')").param("contract", contract).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_printed_form");
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, "
+                        + "individual_request_id, participant_id, attachment_id, file_key, file_hash, file_size, "
+                        + "content_type, deleted_at) values (gen_random_uuid(), 'FINAL', 'MEDICAL_CERTIFICATE', 1, now(), "
+                        + ":request, :participant, :attachment, 'k', 'h', 1, 'image/png', now())")
+                .param("request", REQUEST).param("participant", PARTICIPANT).param("attachment", ATTACHMENT).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_deletion");
+        assertThatThrownBy(() -> jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, "
+                        + "individual_request_id, participant_id, attachment_id, file_key, file_hash, file_size, "
+                        + "content_type, deleted_at, deleted_request_id) values (gen_random_uuid(), 'FINAL', "
+                        + "'MEDICAL_CERTIFICATE', 1, now(), :request, :participant, :attachment, 'k', 'h', 1, "
+                        + "'image/png', now(), '   ')")
+                .param("request", REQUEST).param("participant", PARTICIPANT).param("attachment", ATTACHMENT).update())
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_contract_documents_deletion");
+    }
+
+    @Test
+    void rollbackRemovesEarlyCertificateAndConsentThenUpdateRestoresThem() throws Exception {
+        UUID early = UUID.randomUUID();
+        UUID consent = UUID.randomUUID();
+        insertAttachment(early, ":request, :participant, :attachment", early, UUID.randomUUID(), early);
+        insertConsent(consent);
+        try (Connection connection = dataSource.getConnection()) {
+            Liquibase liquibase = changelog(connection);
+            liquibase.rollback(1, "");
+            try {
+                assertThat(count(early)).isZero();
+                assertThat(count(consent)).isZero();
+                assertThatThrownBy(() -> insertAttachment(early, ":request, :participant, :attachment", early,
+                        UUID.randomUUID(), early)).isInstanceOf(DataIntegrityViolationException.class);
+            } finally {
+                liquibase.update("");
+            }
+        }
+        insertAttachment(early, ":request, :participant, :attachment", early, UUID.randomUUID(), early);
+        insertConsent(consent);
+        assertThat(count(early)).isEqualTo(1);
+        assertThat(count(consent)).isEqualTo(1);
+    }
+
+    private Liquibase changelog(Connection connection) throws Exception {
+        return new Liquibase("db/changelog/db.changelog-master.yaml", new ClassLoaderResourceAccessor(),
+                DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection)));
+    }
+
+    private void insertAttachment(UUID id, String values, UUID request, UUID participant, UUID attachment) {
+        jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, individual_request_id, "
+                        + "participant_id, attachment_id, file_key, file_hash, file_size, content_type) values "
+                        + "(:id, 'FINAL', 'MEDICAL_CERTIFICATE', 1, now(), " + values + ", 'k', 'h', 1, 'image/jpeg')")
+                .param("id", id).param("request", request).param("participant", participant)
+                .param("attachment", attachment).update();
+    }
+
+    private void insertConsent(UUID attachment) {
+        jdbc.sql("insert into contract_documents (id, kind, doc_type, version, created_at, policy_id, "
+                        + "family_member_id, attachment_id, file_key, file_hash, file_size, content_type) values "
+                        + "(:id, 'FINAL', 'PD_CONSENT', 1, now(), :policy, :member, :attachment, 'k', 'h', 1, "
+                        + "'image/jpeg')")
+                .param("id", UUID.randomUUID()).param("policy", UUID.randomUUID()).param("member", UUID.randomUUID())
+                .param("attachment", attachment).update();
+    }
+
+    private int count(UUID attachment) {
+        return jdbc.sql("select count(*) from contract_documents where attachment_id = :attachment")
+                .param("attachment", attachment).query(Integer.class).single();
+    }
+
+    private UUID insertContract() {
+        UUID contract = UUID.randomUUID();
+        UUID insured = UUID.randomUUID();
+        jdbc.sql("insert into contracts (id, number, status, individual_request_id, insured_participant_id, "
+                        + "policyholder_participant_id, insurance_contract_id, insurer_policy_id, date_from, date_to, "
+                        + "premium_amount, entity_version, created_at, updated_at) values (:id, :number, 'DRAFT_READY', "
+                        + ":request, :insured, :holder, gen_random_uuid(), gen_random_uuid(), '2026-04-10', "
+                        + "'2026-04-24', 1, 1, now(), now())")
+                .param("id", contract).param("number", "DKM-TEST-" + contract.toString().substring(0, 8))
+                .param("request", UUID.randomUUID()).param("insured", insured).param("holder", UUID.randomUUID())
+                .update();
+        return contract;
     }
 
     private void insert(String columns, String values) {

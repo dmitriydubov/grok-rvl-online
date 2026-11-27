@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
 import ru.projectx.contracts.entity.contract.Contract;
 import ru.projectx.contracts.entity.document.ParticipantAttachment;
+import ru.projectx.contracts.entity.document.PrintedFormType;
+import ru.projectx.contracts.entity.document.ReceivedDocuments;
 import ru.projectx.contracts.entity.document.PrintedForm;
 import ru.projectx.contracts.entity.document.StoredFile;
 import ru.projectx.contracts.exception.CertificateKeyMissingException;
@@ -101,6 +103,7 @@ class KmContractCertificatesTest {
     @Test
     void certificateRecordWithoutAnObject_breaksThePrerequisitesAsAnInternalFailureWithoutAskingTheStorage() {
         PrintedForm withoutObject = mock();
+        given(withoutObject.docType()).willReturn(PrintedFormType.MEDICAL_CERTIFICATE);
         given(withoutObject.storedFile()).willReturn(Optional.empty());
         given(forms.findByAttachmentIndividualRequestIdAndAttachmentParticipantIdOrderByCreatedAtAscIdAsc(Tasks.REQUEST,
                 Tasks.SPOUSE)).willReturn(List.of(withoutObject));
@@ -120,6 +123,20 @@ class KmContractCertificatesTest {
         willThrow(unexpected).given(store).verifyPresent(JPEG.key());
 
         assertThatThrownBy(() -> certificates.check(contract)).isSameAs(unexpected);
+    }
+
+    @Test
+    void removedCertificateAndConsent_areNotSubmitted() {
+        given(forms.findByAttachmentIndividualRequestIdAndAttachmentParticipantIdOrderByCreatedAtAscIdAsc(Tasks.REQUEST,
+                Tasks.SPOUSE)).willReturn(List.of(
+                        ReceivedDocuments.removed(new ParticipantAttachment(Tasks.REQUEST, Tasks.SPOUSE, UUID.randomUUID()),
+                                JPEG, NOW, new ru.projectx.contracts.entity.document.DocumentRemoval(NOW, "a41f8c02")),
+                        ReceivedDocuments.consent(new ru.projectx.contracts.entity.document.ConsentBinding(
+                                UUID.randomUUID(), UUID.randomUUID()), UUID.randomUUID(), PDF, NOW)));
+
+        assertThat(certificates.check(contract)).isEqualTo(new Prerequisites.Met());
+
+        verifyNoInteractions(store);
     }
 
     private static PrintedForm certificate(StoredFile file) {

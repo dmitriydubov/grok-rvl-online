@@ -121,6 +121,7 @@ class KmContractSubmissionFactsTest {
         PrintedForm form = PrintedForm.issuedFor(PersonOwner.contract(CONTRACT_ID),
                 new UskDocument(PrintedFormType.POLICY, "https://1c-usk.example/p.pdf", null), NOW);
         ReflectionTestUtils.setField(form, "id", FIRST_DOCUMENT);
+        ReflectionTestUtils.setField(form, "docType", PrintedFormType.MEDICAL_CERTIFICATE);
         given(forms.findByAttachmentIndividualRequestIdAndAttachmentParticipantIdOrderByCreatedAtAscIdAsc(Tasks.REQUEST,
                 Tasks.SPOUSE)).willReturn(List.of(form));
 

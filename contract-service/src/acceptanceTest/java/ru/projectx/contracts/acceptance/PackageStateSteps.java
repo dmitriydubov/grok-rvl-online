@@ -29,6 +29,10 @@ public class PackageStateSteps {
     private static final Set<String> MOMENTS = Set.of("acceptance.accepted_at", "payment.expires_at");
     private static final String LM_POLICY_KIND = "LM_POLICY";
     private static final String DOCUMENT_SEPARATOR = "; ";
+    private static final Map<String, String> INVALID_REQUEST_IDS = Map.of(
+            "длиной 65 символов", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+            "с символом /", "req/01",
+            "пустой", "");
 
     private final AttachmentCalls calls;
     private final IssuanceRecords records;
@@ -54,6 +58,14 @@ public class PackageStateSteps {
 
     @Когда("сервис Заявок запрашивает состояние пакета по заявке {string} с заголовком X-Request-Id {string}")
     public void requestsPackageWithRequestId(String request, String requestId) throws IOException, InterruptedException {
+        calls.exchange("GET", path(request), Optional.of(requestId), Optional.empty());
+    }
+
+    @Когда("сервис Заявок запрашивает состояние пакета по заявке {string} с недопустимым заголовком X-Request-Id {string}")
+    public void requestsPackageWithInvalidRequestId(String request, String kind)
+            throws IOException, InterruptedException {
+        String requestId = Optional.ofNullable(INVALID_REQUEST_IDS.get(kind))
+                .orElseThrow(() -> new AssertionError("недопустимого заголовка «" + kind + "» нет в перечне шага"));
         calls.exchange("GET", path(request), Optional.of(requestId), Optional.empty());
     }
 

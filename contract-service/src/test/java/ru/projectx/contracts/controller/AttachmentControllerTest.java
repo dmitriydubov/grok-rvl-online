@@ -33,7 +33,6 @@ import ru.projectx.contracts.dto.AttachmentResponse;
 import ru.projectx.contracts.exception.AttachmentConflictException;
 import ru.projectx.contracts.exception.AttachmentDefect;
 import ru.projectx.contracts.exception.AttachmentRejectedException;
-import ru.projectx.contracts.exception.ParticipantNotFoundException;
 import ru.projectx.contracts.exception.RequestCancelledException;
 import ru.projectx.contracts.exception.RequestNotFoundException;
 import ru.projectx.contracts.exception.StorageUnavailableException;
@@ -65,7 +64,7 @@ class AttachmentControllerTest {
 
     @Test
     void acceptedUpload_answersTheRegistryRecordInSnakeCase() throws Exception {
-        when(uploads.receive(any())).thenReturn(new AttachmentResponse(UUID.fromString(
+        when(uploads.receive(any(CertificateUpload.class))).thenReturn(new AttachmentResponse(UUID.fromString(
                 "0b6c1d2e-7f3a-4b5c-9d8e-1f2a3b4c5d6e"), ATTACHMENT, REQUEST, PARTICIPANT, "image/jpeg", 76, "ab",
                 Instant.parse("2026-02-10T07:05:00Z")));
 
@@ -147,7 +146,7 @@ class AttachmentControllerTest {
         "CONTENT_TYPE, тип файла не допускается",
         "SIZE, размер файла вне допустимого"})
     void rejectedFile_isValidationErrorOfTheFilePart(AttachmentDefect defect, String reason) throws Exception {
-        when(uploads.receive(any())).thenThrow(new AttachmentRejectedException(defect));
+        when(uploads.receive(any(CertificateUpload.class))).thenThrow(new AttachmentRejectedException(defect));
 
         mvc.perform(upload(REQUEST.toString(), PARTICIPANT.toString(), ATTACHMENT.toString(), file("image/gif")))
                 .andExpect(status().isBadRequest())
@@ -163,12 +162,6 @@ class AttachmentControllerTest {
     }
 
     @Test
-    void unknownParticipant_isNotFound() throws Exception {
-        expectError(new ParticipantNotFoundException(REQUEST, PARTICIPANT), 404, "PARTICIPANT_NOT_FOUND",
-                "участника нет в составе заявки");
-    }
-
-    @Test
     void cancelledRequest_isInvalidState() throws Exception {
         expectError(new RequestCancelledException(REQUEST), 409, "INVALID_STATE", "работа по заявке прекращена");
     }
@@ -176,7 +169,7 @@ class AttachmentControllerTest {
     @Test
     void conflictingAttachment_isAttachmentConflict() throws Exception {
         expectError(new AttachmentConflictException(ATTACHMENT), 409, "ATTACHMENT_CONFLICT",
-                "вложение уже принято с другим содержимым или по другому участнику");
+                "вложение уже принято с другим содержимым, другим владельцем или ранее удалено");
     }
 
     @Test
@@ -206,7 +199,7 @@ class AttachmentControllerTest {
     }
 
     private void expectError(RuntimeException failure, int status, String code, String message) throws Exception {
-        when(uploads.receive(any())).thenThrow(failure);
+        when(uploads.receive(any(CertificateUpload.class))).thenThrow(failure);
 
         mvc.perform(upload(REQUEST.toString(), PARTICIPANT.toString(), ATTACHMENT.toString(), file("image/jpeg")))
                 .andExpect(status().is(status))

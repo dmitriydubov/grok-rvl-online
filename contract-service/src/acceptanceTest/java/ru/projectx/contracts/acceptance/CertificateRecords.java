@@ -38,6 +38,16 @@ public class CertificateRecords {
             Instant createdAt) {
     }
 
+    List<Certificate> ofConsent(UUID policy, UUID member) {
+        return jdbc.sql("""
+                select id, attachment_id, doc_type::text as doc_type, content_type, file_size, file_hash, file_key,
+                       created_at
+                  from contract_documents
+                 where policy_id = :policy and family_member_id = :member
+                 order by created_at, id
+                """).param("policy", policy).param("member", member).query(this::certificate).list();
+    }
+
     List<Certificate> of(UUID request, UUID participant) {
         return jdbc.sql(CERTIFICATES).param("request", request).param("participant", participant)
                 .query(this::certificate).list();

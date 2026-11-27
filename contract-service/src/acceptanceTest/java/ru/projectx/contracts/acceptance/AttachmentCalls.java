@@ -27,7 +27,8 @@ public class AttachmentCalls {
     private static final String REQUEST_ID = "X-Request-Id";
     private static final int OK = 200;
 
-    record Answer(int status, Optional<String> requestId, Optional<String> sentRequestId, String body) {
+    record Answer(int status, Optional<String> requestId, Optional<String> sentRequestId, String body, String method,
+            String path) {
     }
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
@@ -48,7 +49,7 @@ public class AttachmentCalls {
         request.requestId().ifPresent(value -> call.header(REQUEST_ID, value));
         HttpResponse<String> response = http.send(call.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         answers.add(new Answer(response.statusCode(), response.headers().firstValue(REQUEST_ID), request.requestId(),
-                response.body()));
+                response.body(), "POST", request.path()));
         remember(request, response.statusCode());
     }
 
@@ -102,6 +103,15 @@ public class AttachmentCalls {
         requestId.ifPresent(value -> call.header(REQUEST_ID, value));
         HttpResponse<String> response = http.send(call.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         answers.add(new Answer(response.statusCode(), response.headers().firstValue(REQUEST_ID), requestId,
-                response.body()));
+                response.body(), method, path));
+    }
+
+    Answer lastPackage() {
+        return answers.reversed().stream().filter(AttachmentCalls::packageCall).findFirst()
+                .orElseThrow(() -> new AssertionError("в сценарии не было запроса состояния пакета"));
+    }
+
+    private static boolean packageCall(Answer answer) {
+        return "GET".equals(answer.method()) && answer.path().contains("/package");
     }
 }

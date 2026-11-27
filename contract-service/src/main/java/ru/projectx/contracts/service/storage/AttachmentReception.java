@@ -1,8 +1,11 @@
 package ru.projectx.contracts.service.storage;
 
+import java.util.Optional;
+import java.util.function.BiFunction;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import ru.projectx.contracts.dto.AttachmentResponse;
+import ru.projectx.contracts.dto.ConsentResponse;
 import ru.projectx.contracts.entity.document.StoredFile;
 import ru.projectx.contracts.exception.StorageUnavailableException;
 
@@ -26,29 +29,49 @@ public class AttachmentReception implements AttachmentUploads {
 
     @Override
     public AttachmentResponse receive(CertificateUpload upload) {
-        AttachmentFiles.AcceptedFile accepted = files.accept(upload);
-        String fileHash = ContentDigests.sha256(upload.content());
-        return registry.accepted(upload, fileHash).orElseGet(() -> stored(upload, new StoredFile(
-                keys.next(upload.attachmentId(), accepted.extension()), fileHash, upload.size(), accepted.contentType())));
+        registry.requireOpen(upload.individualRequestId());
+        return place(upload, registry::accepted, registry::register);
     }
 
-    private AttachmentResponse stored(CertificateUpload upload, StoredFile file) {
+    @Override
+    public ConsentResponse receive(ConsentUpload upload) {
+        return place(upload, registry::accepted, registry::register);
+    }
+
+    private <U extends IncomingFile, R> R place(U upload, BiFunction<U, String, Optional<R>> found,
+            BiFunction<U, StoredFile, R> save) {
+        AttachmentFiles.AcceptedFile accepted = files.accept(upload);
+        String hash = ContentDigests.sha256(upload.content());
+        Optional<R> prior = found.apply(upload, hash);
+        if (prior.isPresent()) {
+            return prior.get();
+        }
+        return write(upload, accepted, hash, new Persist<>(found, save));
+    }
+
+    private <U extends IncomingFile, R> R write(U upload, AttachmentFiles.AcceptedFile accepted, String hash,
+            Persist<U, R> persist) {
+        StoredFile file = new StoredFile(keys.next(upload.attachmentId(), accepted.extension()), hash, upload.size(),
+                accepted.contentType());
         try {
             store.store(file, upload.content());
         } catch (StorageUnavailableException unavailable) {
             metrics.countStorageUnavailable();
             throw unavailable;
         }
-        return registered(upload, file);
+        return commit(upload, file, persist);
     }
 
-    private AttachmentResponse registered(CertificateUpload upload, StoredFile file) {
+    private <U extends IncomingFile, R> R commit(U upload, StoredFile file, Persist<U, R> persist) {
         try {
-            AttachmentResponse response = registry.register(upload, file);
+            R response = persist.save().apply(upload, file);
             metrics.countStored();
             return response;
-        } catch (DataIntegrityViolationException concurrentUpload) {
-            return registry.accepted(upload, file.hash()).orElseThrow(() -> concurrentUpload);
+        } catch (DataIntegrityViolationException concurrent) {
+            return persist.found().apply(upload, file.hash()).orElseThrow(() -> concurrent);
         }
+    }
+
+    private record Persist<U, R>(BiFunction<U, String, Optional<R>> found, BiFunction<U, StoredFile, R> save) {
     }
 }

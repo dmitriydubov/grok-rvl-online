@@ -41,6 +41,11 @@ public class RequestFormatAdvice {
     }
 
     @ExceptionHandler
+    public ResponseEntity<ErrorResponse> uploadFormat(UploadFormatException invalid) {
+        return ApiErrors.invalidField(invalid.field(), invalid.reason());
+    }
+
+    @ExceptionHandler
     public ResponseEntity<ErrorResponse> missingPart(MissingServletRequestPartException missing) {
         return ApiErrors.invalidField(missing.getRequestPartName(), MISSING);
     }

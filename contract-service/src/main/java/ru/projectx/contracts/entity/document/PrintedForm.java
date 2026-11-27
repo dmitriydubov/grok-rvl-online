@@ -74,7 +74,15 @@ public class PrintedForm {
 
     @Nullable
     @Embedded
-    private ParticipantAttachment attachment;
+    ParticipantAttachment attachment;
+
+    @Nullable
+    @Embedded
+    ConsentBinding consent;
+
+    @Nullable
+    @Embedded
+    DocumentRemoval removal;
 
     protected PrintedForm() {
     }
@@ -90,10 +98,12 @@ public class PrintedForm {
         this.createdAt = now;
     }
 
-    private PrintedForm(ParticipantAttachment attachment, StoredFile file, Instant now) {
+    PrintedForm(ParticipantAttachment attachment, @Nullable ConsentBinding consent, StoredFile file,
+            PrintedFormType type, Instant now) {
         this.attachment = attachment;
+        this.consent = consent;
         this.kind = PrintedFormKind.FINAL;
-        this.docType = PrintedFormType.MEDICAL_CERTIFICATE;
+        this.docType = type;
         this.version = FIRST_VERSION;
         this.fileKey = file.key();
         this.fileHash = file.hash();
@@ -107,7 +117,7 @@ public class PrintedForm {
     }
 
     public static PrintedForm receivedCertificate(ParticipantAttachment attachment, StoredFile file, Instant now) {
-        return new PrintedForm(attachment, file, now);
+        return new PrintedForm(attachment, null, file, PrintedFormType.MEDICAL_CERTIFICATE, now);
     }
 
     public UUID id() {

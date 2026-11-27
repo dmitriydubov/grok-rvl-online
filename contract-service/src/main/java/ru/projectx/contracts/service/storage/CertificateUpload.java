@@ -9,5 +9,5 @@ public record CertificateUpload(
         UUID attachmentId,
         @Nullable String contentType,
         long size,
-        ContentSource content) {
+        ContentSource content) implements IncomingFile {
 }

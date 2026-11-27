@@ -100,6 +100,11 @@ public class CertificateStorageSteps {
         assertThat(storage.keys(settings.bucket(), basePath() + SEPARATOR)).as("объекты бакета").hasSize(count);
     }
 
+    @Тогда("содержимое объекта согласия по вложению {string} в хранилище совпадает с отправленным")
+    public void consentContent(String attachment) throws Exception {
+        objectContent(attachment);
+    }
+
     @Тогда("содержимое объекта справки по вложению {string} в хранилище совпадает с отправленным")
     public void objectContent(String attachment) throws Exception {
         String key = records.byAttachment(attachment).key();

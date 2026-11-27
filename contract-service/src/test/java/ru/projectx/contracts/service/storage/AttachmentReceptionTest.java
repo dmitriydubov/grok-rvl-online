@@ -25,9 +25,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.util.unit.DataSize;
 import ru.projectx.contracts.config.storage.AttachmentProperties;
 import ru.projectx.contracts.dto.AttachmentResponse;
+import ru.projectx.contracts.dto.ConsentResponse;
 import ru.projectx.contracts.entity.document.StoredFile;
 import ru.projectx.contracts.exception.AttachmentConflictException;
 import ru.projectx.contracts.exception.AttachmentRejectedException;
+import ru.projectx.contracts.exception.RequestCancelledException;
 import ru.projectx.contracts.exception.StorageUnavailableException;
 
 class AttachmentReceptionTest {
@@ -83,16 +85,48 @@ class AttachmentReceptionTest {
         assertThat(reception.receive(upload)).isSameAs(RESPONSE);
 
         verifyNoInteractions(store, keys);
-        verify(registry, never()).register(any(), any());
+        verify(registry, never()).register(any(CertificateUpload.class), any());
         assertThat(meters.find("contracts.attachments.stored").counter()).isNull();
     }
 
     @Test
-    void rejectedFile_touchesNeitherRegistryNorStorage() {
+    void rejectedFile_isCountedAfterTheRequestIsFoundOpen() {
         assertThatThrownBy(() -> reception.receive(Uploads.of(Uploads.PARTICIPANT, "image/png", Uploads.CONTENT)))
                 .isInstanceOf(AttachmentRejectedException.class);
 
-        verifyNoInteractions(registry, store, keys);
+        verify(registry).requireOpen(Uploads.REQUEST);
+        verify(registry, never()).accepted(any(CertificateUpload.class), any());
+        verifyNoInteractions(store, keys);
+        assertThat(meters.get("contracts.attachments.rejected").tag("reason", "content_type").counter().count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void cancelledRequest_isRejectedBeforeTheFileIsJudged() {
+        doThrow(new RequestCancelledException(Uploads.REQUEST)).when(registry).requireOpen(Uploads.REQUEST);
+
+        assertThatThrownBy(() -> reception.receive(Uploads.of(Uploads.PARTICIPANT, "image/png", Uploads.CONTENT)))
+                .isInstanceOf(RequestCancelledException.class);
+
+        verify(registry, never()).accepted(any(CertificateUpload.class), any());
+        verifyNoInteractions(store, keys);
+        assertThat(meters.find("contracts.attachments.rejected").counter()).isNull();
+    }
+
+    @Test
+    void repeatedConsent_returnsThePriorRecordWhileStorageIsDown() {
+        ConsentUpload upload = new ConsentUpload(UUID.randomUUID(), UUID.randomUUID(), Uploads.ATTACHMENT, "image/jpeg",
+                76, Uploads.jpeg().content());
+        ConsentResponse response = new ConsentResponse(UUID.randomUUID(), Uploads.ATTACHMENT, upload.policyId(),
+                upload.familyMemberId(), "image/jpeg", 76, Uploads.CONTENT_HASH, Instant.parse("2026-02-10T07:05:00Z"));
+        when(registry.accepted(upload, Uploads.CONTENT_HASH)).thenReturn(Optional.of(response));
+        doThrow(new StorageUnavailableException(new IOException("refused"))).when(store).store(any(), any());
+
+        assertThat(reception.receive(upload)).isSameAs(response);
+
+        verifyNoInteractions(store, keys);
+        assertThat(meters.find("contracts.storage.unavailable").counter()).isNull();
+        assertThat(meters.find("contracts.attachments.stored").counter()).isNull();
     }
 
     @Test
@@ -115,7 +149,7 @@ class AttachmentReceptionTest {
 
         assertThatThrownBy(() -> reception.receive(upload)).isSameAs(unavailable);
 
-        verify(registry, never()).register(any(), any());
+        verify(registry, never()).register(any(CertificateUpload.class), any());
         assertThat(meters.get("contracts.storage.unavailable").counter().count()).isEqualTo(1);
     }
 

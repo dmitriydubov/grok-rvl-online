@@ -23,10 +23,10 @@ import ru.projectx.contracts.entity.document.ParticipantAttachment;
 import ru.projectx.contracts.entity.document.PrintedForm;
 import ru.projectx.contracts.entity.issuance.RequestParticipant;
 import ru.projectx.contracts.entity.document.StoredFile;
+import ru.projectx.contracts.dto.ConsentResponse;
+import ru.projectx.contracts.entity.document.ReceivedDocuments;
 import ru.projectx.contracts.exception.AttachmentConflictException;
-import ru.projectx.contracts.exception.ParticipantNotFoundException;
 import ru.projectx.contracts.exception.RequestCancelledException;
-import ru.projectx.contracts.exception.RequestNotFoundException;
 import ru.projectx.contracts.repository.issuance.IssuanceRequestRepository;
 import ru.projectx.contracts.repository.issuance.PrintedFormRepository;
 
@@ -42,26 +42,27 @@ class AttachmentRegistryTest {
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
-    void unknownRequest_isRequestNotFound() {
+    void unknownRequest_staysOpenAndHasNoAcceptedRecord() {
         when(requests.findById(Uploads.REQUEST)).thenReturn(Optional.empty());
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH))
-                .isInstanceOf(RequestNotFoundException.class).hasMessageContaining(Uploads.REQUEST.toString());
+        registry.requireOpen(Uploads.REQUEST);
+
+        assertThat(registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH)).isEmpty();
     }
 
     @Test
-    void participantOutsideTheComposition_isParticipantNotFound() {
-        knownRequest(false, Uploads.OTHER_PARTICIPANT);
+    void participantOutsideTheComposition_hasNoAcceptedRecord() {
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH))
-                .isInstanceOf(ParticipantNotFoundException.class).hasMessageContaining(Uploads.PARTICIPANT.toString());
+        assertThat(registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH)).isEmpty();
     }
 
     @Test
-    void cancelledRequest_isRequestCancelledEvenForItsParticipant() {
-        knownRequest(true, Uploads.PARTICIPANT);
+    void cancelledRequest_isRequestCancelledEvenWithoutParticipants() {
+        knownRequest(true);
 
-        assertThatThrownBy(() -> registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH))
+        assertThatThrownBy(() -> registry.requireOpen(Uploads.REQUEST))
                 .isInstanceOf(RequestCancelledException.class).hasMessageContaining(Uploads.REQUEST.toString());
     }
 
@@ -131,13 +132,59 @@ class AttachmentRegistryTest {
     }
 
     @Test
-    void participantExcludedWhileTheFileWasStored_isNotRegistered() {
-        knownRequest(false, Uploads.OTHER_PARTICIPANT);
+    void registerWithoutAKnownRequest_savesTheCertificate() {
+        when(requests.findById(Uploads.REQUEST)).thenReturn(Optional.empty());
+        when(documents.saveAndFlush(any(PrintedForm.class))).thenAnswer(saved -> saved.getArgument(0));
 
-        assertThatThrownBy(() -> registry.register(Uploads.jpeg(), FILE))
-                .isInstanceOf(ParticipantNotFoundException.class);
+        registry.register(Uploads.jpeg(), FILE);
 
-        verify(documents, never()).saveAndFlush(any());
+        verify(documents).saveAndFlush(any(PrintedForm.class));
+    }
+
+    @Test
+    void sameBytesWithAnotherContentType_keepTheStoredType() {
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT))
+                .thenReturn(Optional.of(certificate(Uploads.PARTICIPANT, Uploads.CONTENT_HASH)));
+
+        assertThat(registry.accepted(Uploads.of(Uploads.PARTICIPANT, "image/png", Uploads.CONTENT),
+                Uploads.CONTENT_HASH)).get().returns("image/jpeg", AttachmentResponse::contentType);
+    }
+
+    @Test
+    void certificateAgainstAStoredConsent_isConflict() {
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.of(
+                ReceivedDocuments.consent(new ru.projectx.contracts.entity.document.ConsentBinding(UUID.randomUUID(),
+                        UUID.randomUUID()), Uploads.ATTACHMENT, FILE, NOW)));
+
+        assertThatThrownBy(() -> registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH))
+                .isInstanceOf(AttachmentConflictException.class);
+    }
+
+    @Test
+    void removedCertificateWithTheSameBytes_isConflict() {
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.of(ReceivedDocuments.removed(
+                new ParticipantAttachment(Uploads.REQUEST, Uploads.PARTICIPANT, Uploads.ATTACHMENT), FILE,
+                NOW.minusSeconds(300), new ru.projectx.contracts.entity.document.DocumentRemoval(NOW,
+                        "a41f8c02-7d3b-4e19-9a55-2c7e0b6f1d84"))));
+
+        assertThatThrownBy(() -> registry.accepted(Uploads.jpeg(), Uploads.CONTENT_HASH))
+                .isInstanceOf(AttachmentConflictException.class);
+    }
+
+    @Test
+    void sameConsent_returnsThePriorRecord() {
+        UUID policy = UUID.randomUUID();
+        UUID member = UUID.randomUUID();
+        ConsentUpload upload = new ConsentUpload(policy, member, Uploads.ATTACHMENT, "image/png", FILE.size(),
+                Uploads.jpeg().content());
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.of(
+                ReceivedDocuments.consent(new ru.projectx.contracts.entity.document.ConsentBinding(policy, member),
+                        Uploads.ATTACHMENT, FILE, NOW.minusSeconds(300))));
+
+        assertThat(registry.accepted(upload, Uploads.CONTENT_HASH)).get()
+                .returns("image/jpeg", ConsentResponse::contentType)
+                .returns(policy, ConsentResponse::policyId)
+                .returns(member, ConsentResponse::familyMemberId);
     }
 
     private void knownRequest(boolean cancelled, UUID... participants) {
