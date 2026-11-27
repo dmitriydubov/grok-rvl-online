@@ -61,10 +61,12 @@ class AttachmentPartFormatTest {
         mvc.perform(multipart(CERTIFICATE, REQUEST, PARTICIPANT).file(named).file(file))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"));
+                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"))
+                .andExpect(jsonPath("$.error.details[0].reason").value("неверный формат"));
         mvc.perform(multipart(CONSENT, POLICY, MEMBER).file(named).file(file))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"));
+                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"))
+                .andExpect(jsonPath("$.error.details[0].reason").value("неверный формат"));
 
         verifyNoInteractions(uploads);
         org.assertj.core.api.Assertions.assertThat(meters.find("contracts.attachments.rejected").counter()).isNull();
@@ -82,6 +84,23 @@ class AttachmentPartFormatTest {
 
         verifyNoInteractions(uploads);
         org.assertj.core.api.Assertions.assertThat(meters.find("contracts.attachments.rejected").counter()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   "})
+    void blankAttachmentId_isAMissingFieldOnBothUploads(String raw) throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "Тестова_Анна_070у.jpg", "image/jpeg", CONTENT);
+
+        mvc.perform(multipart(CERTIFICATE, REQUEST, PARTICIPANT).file(file).param("attachment_id", raw))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"))
+                .andExpect(jsonPath("$.error.details[0].reason").value("обязательное поле не передано"));
+        mvc.perform(multipart(CONSENT, POLICY, MEMBER).file(file).param("attachment_id", raw))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.details[0].field").value("attachment_id"))
+                .andExpect(jsonPath("$.error.details[0].reason").value("обязательное поле не передано"));
+
+        verifyNoInteractions(uploads);
     }
 
     @Test

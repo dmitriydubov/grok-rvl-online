@@ -24,6 +24,9 @@ import ru.projectx.contracts.entity.document.PrintedForm;
 import ru.projectx.contracts.entity.issuance.RequestParticipant;
 import ru.projectx.contracts.entity.document.StoredFile;
 import ru.projectx.contracts.dto.ConsentResponse;
+import ru.projectx.contracts.entity.document.ConsentBinding;
+import ru.projectx.contracts.entity.document.DocumentViews;
+import ru.projectx.contracts.entity.document.PrintedFormType;
 import ru.projectx.contracts.entity.document.ReceivedDocuments;
 import ru.projectx.contracts.exception.AttachmentConflictException;
 import ru.projectx.contracts.exception.RequestCancelledException;
@@ -185,6 +188,43 @@ class AttachmentRegistryTest {
                 .returns("image/jpeg", ConsentResponse::contentType)
                 .returns(policy, ConsentResponse::policyId)
                 .returns(member, ConsentResponse::familyMemberId);
+    }
+
+    @Test
+    void sameBytesForAnotherFamilyMember_isConflict() {
+        UUID policy = UUID.fromString("f0e1d2c3-b4a5-4678-9abc-def012345678");
+        UUID member = UUID.fromString("11111111-2222-4333-8444-555555555555");
+        UUID otherMember = UUID.fromString("22222222-3333-4444-8555-666666666666");
+        ConsentUpload upload = new ConsentUpload(policy, otherMember, Uploads.ATTACHMENT, "image/png", FILE.size(),
+                Uploads.jpeg().content());
+        when(documents.findByAttachmentAttachmentId(Uploads.ATTACHMENT)).thenReturn(Optional.of(
+                ReceivedDocuments.consent(new ConsentBinding(policy, member), Uploads.ATTACHMENT, FILE, NOW)));
+
+        assertThatThrownBy(() -> registry.accepted(upload, Uploads.CONTENT_HASH))
+                .isInstanceOf(AttachmentConflictException.class)
+                .hasMessageContaining(Uploads.ATTACHMENT.toString());
+    }
+
+    @Test
+    void register_savesTheConsentOfTheFamilyAtTheCurrentInstant() {
+        UUID policy = UUID.fromString("f0e1d2c3-b4a5-4678-9abc-def012345678");
+        UUID member = UUID.fromString("11111111-2222-4333-8444-555555555555");
+        ConsentUpload upload = new ConsentUpload(policy, member, Uploads.ATTACHMENT, "image/png", FILE.size(),
+                Uploads.jpeg().content());
+        when(documents.saveAndFlush(any(PrintedForm.class))).thenAnswer(saved -> saved.getArgument(0));
+
+        ConsentResponse response = registry.register(upload, FILE);
+
+        ArgumentCaptor<PrintedForm> saved = ArgumentCaptor.forClass(PrintedForm.class);
+        verify(documents).saveAndFlush(saved.capture());
+        PrintedForm consent = saved.getValue();
+        assertThat(consent.docType()).isEqualTo(PrintedFormType.PD_CONSENT);
+        assertThat(consent.createdAt()).isEqualTo(NOW);
+        assertThat(consent.storedFile()).contains(FILE);
+        assertThat(DocumentViews.consent(consent)).isEqualTo(new ConsentBinding(policy, member));
+        assertThat(DocumentViews.attachmentId(consent)).isEqualTo(Uploads.ATTACHMENT);
+        assertThat(response).isEqualTo(new ConsentResponse(consent.id(), Uploads.ATTACHMENT, policy, member,
+                FILE.contentType(), FILE.size(), FILE.hash(), NOW));
     }
 
     private void knownRequest(boolean cancelled, UUID... participants) {
