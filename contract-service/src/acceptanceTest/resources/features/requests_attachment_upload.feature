@@ -235,12 +235,12 @@
       | document_id           | есть            |
       | attachment_id         | <attachment_id> |
       | individual_request_id | <заявка>        |
-      | participant_id        | <участник>      |
+      | participant_id        | <участник ответа> |
       | content_type          | <content_type>  |
       | file_size             | <размер>        |
       | file_hash             | <file_hash>     |
       | created_at            | <created_at>    |
-    И справки участника "<участник>" заявки "61a7982c-a0b4-4bbf-9527-60b40b752803" в реестре документов:
+    И справки участника "<участник ответа>" заявки "61a7982c-a0b4-4bbf-9527-60b40b752803" в реестре документов:
       | вложение        | doc_type   | content_type   | размер   | file_hash   | ключ объекта   | создана      |
       | <attachment_id> | <doc_type> | <content_type> | <размер> | <file_hash> | <ключ объекта> | <created_at> |
     И содержимое объекта справки по вложению "3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21" в хранилище совпадает с отправленным
@@ -250,11 +250,11 @@
     И в журнале Договоров нет записей уровня ERROR
 
     Примеры:
-      | участник                             | тип             | содержимое                                   | код | attachment_id                        | заявка                               | content_type    | размер | file_hash                                                        | doc_type            | ключ объекта                                                                      | created_at                | объектов | рост |
-      | ae8312c3-350b-4d0b-806c-5e2460e74dbc | image/jpeg      | СТЕНД: вымышленная справка 070/у, участник 1 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/jpeg      | 76     | 7851d78af0fb98bbbda8933f49860a009ac7761c21a1136613c8a6704b156251 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.jpg | 2026-02-10T10:05:00+03:00 | 1        | 1    |
-      | 9275471c-d2fe-484f-97a6-d6d7b1267b5e | image/png       | СТЕНД: вымышленная справка 070/у, участник 2 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/png       | 76     | d1f04048bcabe9c13a4bc6aac283f11ac655620c18e03d472516f9129f06a984 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.png | 2026-02-10T10:05:00+03:00 | 1        | 1    |
-      | 6778e8c2-985a-4d54-9bd3-0f6403b104d6 | image/jpeg      | СТЕНД: вымышленная справка 070/у, участник 1 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/jpeg      | 76     | 7851d78af0fb98bbbda8933f49860a009ac7761c21a1136613c8a6704b156251 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.jpg | 2026-02-10T10:05:00+03:00 | 1        | 1    |
-      | ae8312c3-350b-4d0b-806c-5e2460e74dbc | application/pdf | СТЕНД: вымышленная справка 070/у в PDF       | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | application/pdf | 63     | 80858c92b4ddafae0be3b365ade0f7482b7b7e1ac07e107837180901a0bdefc0 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.pdf | 2026-02-10T10:05:00+03:00 | 1        | 1    |
+      | участник                             | участник ответа                      | тип             | содержимое                                   | код | attachment_id                        | заявка                               | content_type    | размер | file_hash                                                        | doc_type            | ключ объекта                                                                      | created_at                | объектов | рост |
+      | ae8312c3-350b-4d0b-806c-5e2460e74dbc | ae8312c3-350b-4d0b-806c-5e2460e74dbc | image/jpeg      | СТЕНД: вымышленная справка 070/у, участник 1 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/jpeg      | 76     | 7851d78af0fb98bbbda8933f49860a009ac7761c21a1136613c8a6704b156251 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.jpg | 2026-02-10T10:05:00+03:00 | 1        | 1    |
+      | 9275471c-d2fe-484f-97a6-d6d7b1267b5e | 9275471c-d2fe-484f-97a6-d6d7b1267b5e | image/png       | СТЕНД: вымышленная справка 070/у, участник 2 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/png       | 76     | d1f04048bcabe9c13a4bc6aac283f11ac655620c18e03d472516f9129f06a984 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.png | 2026-02-10T10:05:00+03:00 | 1        | 1    |
+      | 6778e8c2-985a-4d54-9bd3-0f6403b104d6 | 6778e8c2-985a-4d54-9bd3-0f6403b104d6 | image/jpeg      | СТЕНД: вымышленная справка 070/у, участник 1 | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | image/jpeg      | 76     | 7851d78af0fb98bbbda8933f49860a009ac7761c21a1136613c8a6704b156251 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.jpg | 2026-02-10T10:05:00+03:00 | 1        | 1    |
+      | ae8312c3-350b-4d0b-806c-5e2460e74dbc | ae8312c3-350b-4d0b-806c-5e2460e74dbc | application/pdf | СТЕНД: вымышленная справка 070/у в PDF       | 200 | 3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21 | 61a7982c-a0b4-4bbf-9527-60b40b752803 | application/pdf | 63     | 80858c92b4ddafae0be3b365ade0f7482b7b7e1ac07e107837180901a0bdefc0 | MEDICAL_CERTIFICATE | 1111111111_222222222/certificates/{uuid}/3c2f8e10-5a7b-4d21-9f6e-1b0a7c4d8e21.pdf | 2026-02-10T10:05:00+03:00 | 1        | 1    |
 
   # [Д-04]: повторная загрузка с тем же идентификатором вложения не создаёт дубля; [СЭ-О]: POST повторяется с тем же ключом
   # идемпотентности; [К6c?]: повтор с тем же содержимым — 200 и прежняя запись (тот же document_id и время первой загрузки),
