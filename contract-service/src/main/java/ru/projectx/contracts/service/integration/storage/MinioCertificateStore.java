@@ -46,7 +46,10 @@ public class MinioCertificateStore implements CertificateStore {
     @Override
     public void verifyPresent(String key) {
         StatObjectArgs object = StatObjectArgs.builder().bucket(bucket).object(key).build();
-        read(() -> client.statObject(object));
+        read(() -> {
+            client.statObject(object);
+            return null;
+        });
     }
 
     @Override
