@@ -37,6 +37,11 @@ public class InternalApiSteps {
         }
     }
 
+    @Тогда("Договоры ответили на загрузку согласия {int}:")
+    public void answeredConsentUpload(int status, DataTable fields) {
+        answeredUpload(status, fields);
+    }
+
     @Тогда("Договоры ответили ошибкой {int} {string}")
     public void answeredError(int status, String code) {
         AttachmentCalls.Answer answer = calls.last();

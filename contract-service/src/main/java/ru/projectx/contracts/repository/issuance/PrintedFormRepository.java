@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import ru.projectx.contracts.entity.document.PrintedForm;
+import ru.projectx.contracts.entity.document.PrintedFormType;
 
 public interface PrintedFormRepository extends JpaRepository<PrintedForm, UUID> {
 
@@ -14,6 +15,6 @@ public interface PrintedFormRepository extends JpaRepository<PrintedForm, UUID> 
 
     Optional<PrintedForm> findByAttachmentAttachmentId(UUID attachmentId);
 
-    List<PrintedForm> findByAttachmentIndividualRequestIdAndAttachmentParticipantIdOrderByCreatedAtAscIdAsc(
-            UUID individualRequestId, UUID participantId);
+    List<PrintedForm> findByAttachmentIndividualRequestIdAndAttachmentParticipantIdAndDocTypeAndAttachmentDeletedAtIsNullOrderByCreatedAtAscIdAsc(
+            UUID individualRequestId, UUID participantId, PrintedFormType docType);
 }

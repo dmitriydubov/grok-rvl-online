@@ -86,9 +86,9 @@ public class AttachmentCalls {
 
     private void remember(AttachmentRequest request, int status) {
         request.attachmentPart().ifPresent(attachment -> request.filePart().ifPresent(file -> {
-            sent.put(attachment, file.content());
+            sent.put(attachment.value(), file.content());
             if (status == OK) {
-                accepted.put(attachment, file.content());
+                accepted.put(attachment.value(), file.content());
             }
         }));
     }

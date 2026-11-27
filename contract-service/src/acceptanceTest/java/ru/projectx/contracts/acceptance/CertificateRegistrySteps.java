@@ -3,6 +3,7 @@ package ru.projectx.contracts.acceptance;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.cucumber.datatable.DataTable;
+import io.cucumber.java.ru.Дано;
 import io.cucumber.java.ru.Тогда;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -26,25 +27,49 @@ public class CertificateRegistrySteps {
             "file_hash", CertificateRecords.Certificate::hash);
 
     private final CertificateRecords records;
+    private final StandClock clock;
 
-    public CertificateRegistrySteps(CertificateRecords records) {
+    public CertificateRegistrySteps(CertificateRecords records, StandClock clock) {
         this.records = records;
+        this.clock = clock;
+    }
+
+    @Дано("вложение {string} в реестре документов помечено удалённым")
+    public void markDeleted(String attachment) {
+        records.markDeleted(attachment, clock.instant(), "stand-delete-request");
     }
 
     @Тогда("справки участника {string} заявки {string} в реестре документов:")
     public void certificates(String participant, String request, DataTable expected) {
-        List<CertificateRecords.Certificate> stored = records.of(UUID.fromString(request), UUID.fromString(participant));
-        List<Map<String, String>> rows = expected.asMaps();
-        assertThat(stored).as("справки участника %s", participant).hasSize(rows.size());
-        for (int index = 0; index < rows.size(); index++) {
-            matches(stored.get(index), rows.get(index));
-        }
+        assertRecords("справки участника " + participant,
+                records.of(UUID.fromString(request), UUID.fromString(participant)), expected);
     }
 
     @Тогда("в реестре документов нет справок участника {string} заявки {string}")
     public void noCertificates(String participant, String request) {
         assertThat(records.of(UUID.fromString(request), UUID.fromString(participant)))
                 .as("справки участника %s", participant).isEmpty();
+    }
+
+    @Тогда("согласия родственника {string} по полису {string} в реестре документов:")
+    public void consents(String familyMember, String policy, DataTable expected) {
+        assertRecords("согласия родственника " + familyMember,
+                records.ofConsent(UUID.fromString(policy), UUID.fromString(familyMember)), expected);
+    }
+
+    @Тогда("в реестре документов нет согласий родственника {string} по полису {string}")
+    public void noConsents(String familyMember, String policy) {
+        assertThat(records.ofConsent(UUID.fromString(policy), UUID.fromString(familyMember)))
+                .as("согласия родственника %s", familyMember).isEmpty();
+    }
+
+    private static void assertRecords(String description, List<CertificateRecords.Certificate> stored,
+            DataTable expected) {
+        List<Map<String, String>> rows = expected.asMaps();
+        assertThat(stored).as(description).hasSize(rows.size());
+        for (int index = 0; index < rows.size(); index++) {
+            matches(stored.get(index), rows.get(index));
+        }
     }
 
     static String keyPattern(String expected) {
